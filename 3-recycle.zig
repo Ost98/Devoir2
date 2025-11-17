@@ -241,3 +241,25 @@ test "allocation de tableaux" {
     const d = try allocator.alloc(u64, 4);
     try expectEqual(@intFromPtr(b.ptr), @intFromPtr(d.ptr));
 }
+
+test "first-fit ignore les blocs trop petits" {
+    var buffer: [128]u8 = undefined;
+    var recycle = AllocateurRecycle.init(&buffer);
+    const allocator = recycle.allocator();
+
+    const a = try allocator.alloc(u8, 8);
+    _ = try allocator.alloc(u8, 16); // le bloc central, pas nécessaire de le nommer
+    const c = try allocator.alloc(u8, 16);
+
+    // On libère un petit bloc (a) et un plus grand (c).
+    allocator.free(a);
+    allocator.free(c);
+
+    // On demande 12 octets : a est trop petit, c est assez grand.
+    const d = try allocator.alloc(u8, 12);
+
+    // On vérifie qu'on a bien réutilisé c (et pas a).
+    try expectEqual(@intFromPtr(c.ptr), @intFromPtr(d.ptr));
+    try expect(@intFromPtr(a.ptr) != @intFromPtr(d.ptr));
+}
+
